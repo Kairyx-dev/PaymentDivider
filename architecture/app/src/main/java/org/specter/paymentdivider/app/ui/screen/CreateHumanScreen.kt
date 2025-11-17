@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -37,6 +38,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import org.specter.paymentdivider.BuildConfig
 import org.specter.paymentdivider.app.NavigationOption
 import org.specter.paymentdivider.app.NavigationRoute
 import org.specter.paymentdivider.app.PaymentDividerViewModel
@@ -141,6 +143,8 @@ private fun CreateHumanScreen(
             Spacer(Modifier.width(10.dp))
         }
     }
+
+    Text(text = "Version: ${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Preview(showBackground = true)
