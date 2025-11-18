@@ -7,16 +7,17 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.specter.paymentdivider.domain.model.Human
 import org.specter.paymentdivider.domain.model.HumanWithPayment
 import org.specter.paymentdivider.domain.model.Payment
 import org.specter.paymentdivider.domain.model.PaymentType
 import javax.inject.Inject
-import kotlin.text.replace
 
 @HiltViewModel
 class PaymentCalculateScreenViewModel @Inject constructor(
@@ -67,6 +68,18 @@ class PaymentCalculateScreenViewModel @Inject constructor(
         }
     }
 
+    fun onSelectPayer(changedHuman: CustomHuman, selected: Boolean) {
+        _uiState.update {
+            it.copy(customHumanList = it.customHumanList.map { customHuman ->
+                if (changedHuman.human.id == customHuman.human.id) {
+                    customHuman.copy(isPayer = selected, selected = true)
+                } else {
+                    customHuman.copy(isPayer = false)
+                }
+            })
+        }
+    }
+
     fun onCustomAmountChange(changedHuman: CustomHuman, amount: String) {
         _uiState.update {
             it.copy(customHumanList = it.customHumanList.map { customHuman ->
@@ -98,6 +111,13 @@ class PaymentCalculateScreenViewModel @Inject constructor(
                 return@launch
             }
 
+            val payer = current.customHumanList.find { it.isPayer }
+
+            if (payer == null) {
+                showToast("결제 여부를 선택하세요")
+                return@launch
+            }
+
             val payment = Payment(
                 name = current.paymentNameInput,
                 totalAmount = current.paymentAmountInput,
@@ -110,7 +130,8 @@ class PaymentCalculateScreenViewModel @Inject constructor(
                     payment = payment,
                     human = it.human,
                     customAmount = it.customAmount,
-                    enabled = it.selected
+                    enabled = it.selected,
+                    isPayer = it.isPayer
                 )
             }
 
@@ -135,43 +156,90 @@ class PaymentCalculateScreenViewModel @Inject constructor(
         paymentWithHuman: List<HumanWithPayment>,
         resultList: List<DivideResult>
     ): List<DivideResult> {
-        val result = if (payment.option == PaymentType.N_DIVIDE) {
-            val enabledHuman = paymentWithHuman.filter { it.enabled }
-
-            val nDividePrice = payment.totalAmount / enabledHuman.size
-
-            resultList.map { divideResult ->
-                if (divideResult.human.id in enabledHuman.map { it.human.id }) {
-                    divideResult.copy(amount = divideResult.amount + nDividePrice)
-                } else {
-                    divideResult
-                }
-            }
+        return if (payment.option == PaymentType.N_DIVIDE) {
+            calculateNDivide(paymentWithHuman, payment, resultList)
         } else {
-            var remainAmount = payment.totalAmount
+            calculateCustomDivide(payment, paymentWithHuman, resultList)
+        }
+    }
 
-            val (customHuman, nDivideHuman) = paymentWithHuman.partition { it.customAmount > 0 && it.enabled }
+    private fun calculateNDivide(
+        paymentWithHuman: List<HumanWithPayment>,
+        payment: Payment,
+        resultList: List<DivideResult>
+    ): List<DivideResult> {
+        val payer = paymentWithHuman.find { it.isPayer }!!
+        val enabledHuman = paymentWithHuman.filter { it.enabled && !it.isPayer }
 
-            val customMapped = resultList.map { divideResult ->
-                customHuman.find { it.human.id == divideResult.human.id }?.let {
-                    remainAmount -= it.customAmount
-                    divideResult.copy(amount = divideResult.amount + it.customAmount)
-                } ?: divideResult
+        val nDivideSize = if (payer.enabled) {
+            enabledHuman.size + 1
+        } else {
+            enabledHuman.size
+        }
 
-            }
+        // N빵 가격 = 전체 가격 / (포함된 사람 + 결제자)
+        val nDividePrice = payment.totalAmount / (nDivideSize)
 
-            customMapped.map { divideResult ->
-                nDivideHuman.find { it.human.id == divideResult.human.id }?.let {
-                    divideResult.copy(amount = divideResult.amount + remainAmount / nDivideHuman.size)
-                } ?: divideResult
+        return resultList.map { divideResult ->
+            when (divideResult.human.id) {
+                // 결제자
+                payer.human.id -> divideResult.copy(
+                    amount = divideResult.amount + (if (payer.enabled) {
+                        nDividePrice
+                    } else {
+                        0
+                    } - payment.totalAmount)
+                )
+
+                // 포함된 사람들
+                in enabledHuman.map { it.human.id } -> divideResult.copy(amount = divideResult.amount + nDividePrice)
+
+                // 포함되지 않은 사람들
+                else -> divideResult
             }
         }
-        return result
+    }
+
+    private fun calculateCustomDivide(
+        payment: Payment,
+        paymentWithHuman: List<HumanWithPayment>,
+        resultList: List<DivideResult>
+    ): List<DivideResult> {
+        var remainAmount = payment.totalAmount
+        val (customHuman, nDivideHuman) = paymentWithHuman.partition { it.customAmount > 0 && it.enabled }
+
+        val customMapped = resultList.map { divideResult ->
+            customHuman.find { it.human.id == divideResult.human.id }?.let {
+                remainAmount -= it.customAmount
+
+                if (it.isPayer) {
+                    // 커스텀 가격 지정된 결제자
+                    divideResult.copy(amount = divideResult.amount + (it.customAmount - payment.totalAmount))
+                } else {
+                    // 커스텀 가격 지정된 사람
+                    divideResult.copy(amount = divideResult.amount + it.customAmount)
+                }
+            } ?: divideResult
+        }
+
+        val nDividePrice = remainAmount / nDivideHuman.size
+        return customMapped.map { divideResult ->
+            nDivideHuman.find { it.human.id == divideResult.human.id }?.let {
+                when {
+                    it.isPayer && it.enabled -> divideResult.copy(amount = divideResult.amount + (nDividePrice - payment.totalAmount))
+                    it.isPayer -> divideResult.copy(amount = divideResult.amount - payment.totalAmount)
+                    it.enabled -> divideResult.copy(amount = divideResult.amount + nDividePrice)
+                    else -> divideResult
+                }
+            } ?: divideResult
+        }
     }
 
     private fun String.toAmount(): Int = replace(",", "").toIntOrNull() ?: 0
 
-    private fun showToast(text: String) {
-        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+    private suspend fun showToast(text: String) = coroutineScope {
+        withContext(Dispatchers.Main){
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        }
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Checkbox
@@ -27,6 +28,7 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -65,6 +67,7 @@ data class PaymentCalculateScreenState(
 data class CustomHuman(
     val human: Human,
     val selected: Boolean,
+    val isPayer: Boolean = false,
     val customAmount: Int = 0,
 )
 
@@ -96,6 +99,7 @@ fun PaymentCalculateScreen(
         onClickAddPayment = screenViewModel::onClickAddPayment,
         onSelectType = screenViewModel::setSelectType,
         onSelectCustomHuman = screenViewModel::onSelectCustomHuman,
+        onSelectPayer = screenViewModel::onSelectPayer,
         onCustomAmountChange = screenViewModel::onCustomAmountChange,
     )
 }
@@ -110,6 +114,7 @@ private fun PaymentCalculateScreen(
     onClickAddPayment: () -> Unit,
     onSelectType: (PaymentType) -> Unit,
     onSelectCustomHuman: (CustomHuman, Boolean) -> Unit,
+    onSelectPayer: (CustomHuman, Boolean) -> Unit,
     onCustomAmountChange: (CustomHuman, String) -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -119,7 +124,7 @@ private fun PaymentCalculateScreen(
             .fillMaxSize()
             .safeDrawingPadding()
             .padding(horizontal = 20.dp)
-            .scrollable(scrollState, orientation = Orientation.Vertical),
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -136,6 +141,7 @@ private fun PaymentCalculateScreen(
             onClickAdd = onClickAddPayment,
             onSelectType = onSelectType,
             onSelectCustomHuman = onSelectCustomHuman,
+            onSelectPayer = onSelectPayer,
             onCustomAmountChange = onCustomAmountChange
         )
 
@@ -205,6 +211,7 @@ private fun PaymentInput(
     onClickAdd: () -> Unit,
     onSelectType: (PaymentType) -> Unit,
     onSelectCustomHuman: (CustomHuman, Boolean) -> Unit,
+    onSelectPayer: (CustomHuman, Boolean) -> Unit,
     onCustomAmountChange: (CustomHuman, String) -> Unit,
 ) {
     Column(
@@ -290,15 +297,17 @@ private fun PaymentInput(
                     .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(modifier = Modifier.weight(5f), text = "이름", textAlign = TextAlign.Center)
+                Text(modifier = Modifier.weight(3f), text = "이름", textAlign = TextAlign.Center)
                 VerticalDivider(thickness = 1.dp)
 
                 if (selectedType == PaymentType.CUSTOM) {
-                    Text(modifier = Modifier.weight(2.5f), text = "금액 지정", textAlign = TextAlign.Center)
+                    Text(modifier = Modifier.weight(2f), text = "금액 지정", textAlign = TextAlign.Center)
                     VerticalDivider(thickness = 1.dp)
                 }
 
-                Text(modifier = Modifier.weight(2.5f), text = "포함 여부", textAlign = TextAlign.Center)
+                Text(modifier = Modifier.weight(2f), text = "포함 여부", textAlign = TextAlign.Center)
+                VerticalDivider(thickness = 1.dp)
+                Text(modifier = Modifier.weight(2f), text = "결제 여부", textAlign = TextAlign.Center)
             }
 
             HorizontalDivider(thickness = 1.dp)
@@ -310,12 +319,12 @@ private fun PaymentInput(
                         .padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(modifier = Modifier.weight(5f), text = it.human.name, textAlign = TextAlign.Center)
+                    Text(modifier = Modifier.weight(3f), text = it.human.name, textAlign = TextAlign.Center)
                     VerticalDivider(thickness = 1.dp)
 
                     if (selectedType == PaymentType.CUSTOM) {
                         BasicTextField(
-                            modifier = Modifier.weight(2.5f),
+                            modifier = Modifier.weight(2f),
                             value = it.customAmount.toString(),
                             textStyle = TextStyle.Default.copy(textAlign = TextAlign.Center),
                             onValueChange = { value -> onCustomAmountChange(it, value) },
@@ -326,8 +335,14 @@ private fun PaymentInput(
                     }
 
 
-                    Box(modifier = Modifier.weight(2.5f), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.weight(2f), contentAlignment = Alignment.Center) {
                         Checkbox(checked = it.selected, onCheckedChange = { checked -> onSelectCustomHuman(it, checked) })
+                    }
+
+                    VerticalDivider(thickness = 1.dp)
+
+                    Box(modifier = Modifier.weight(2f), contentAlignment = Alignment.Center) {
+                        RadioButton(selected = it.isPayer, onClick = { onSelectPayer(it, true) })
                     }
                 }
                 HorizontalDivider(thickness = 1.dp)
@@ -365,7 +380,7 @@ private fun PreviewPaymentCalculateScreen() {
         uiState = PaymentCalculateScreenState(
             paymentNameInput = "밥",
             paymentAmountInput = 50_000,
-            customHumanList = listOf(CustomHuman(Human(name = "Kshull"), true, 10_000)),
+            customHumanList = listOf(CustomHuman(Human(name = "Kshull"), selected = true, customAmount = 10_000)),
             paymentList = listOf(
                 Payment(
                     name = "카페",
@@ -381,6 +396,7 @@ private fun PreviewPaymentCalculateScreen() {
         onClickAddPayment = {},
         onSelectType = {},
         onSelectCustomHuman = { _, _ -> },
+        onSelectPayer = { _, _ -> },
         onCustomAmountChange = { _, _ -> },
     )
 }

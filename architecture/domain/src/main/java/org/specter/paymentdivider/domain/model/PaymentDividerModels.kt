@@ -23,5 +23,6 @@ data class HumanWithPayment(
     val payment: Payment,
     val human: Human,
     val customAmount: Int,
-    val enabled: Boolean
+    val enabled: Boolean,
+    val isPayer: Boolean,
 )
